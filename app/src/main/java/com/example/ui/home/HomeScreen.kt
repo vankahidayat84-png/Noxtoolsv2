@@ -429,27 +429,34 @@ fun VideoBanner() {
 
     val exoPlayer = remember(bannerResId) {
         if (bannerResId != 0) {
-            ExoPlayer.Builder(context)
-                .setAudioAttributes(AudioAttributes.DEFAULT, false)
-                .build().apply {
-                val uri = Uri.parse("android.resource://${context.packageName}/$bannerResId")
-                setMediaItem(MediaItem.fromUri(uri))
-                repeatMode = Player.REPEAT_MODE_ALL
-                volume = 0f
-                trackSelectionParameters = trackSelectionParameters
-                    .buildUpon()
-                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
-                    .build()
-                prepare()
-                playWhenReady = true
-                videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
+            try {
+                ExoPlayer.Builder(context)
+                    .build().apply {
+                    val uri = Uri.parse("android.resource://${context.packageName}/$bannerResId")
+                    setMediaItem(MediaItem.fromUri(uri))
+                    repeatMode = Player.REPEAT_MODE_ALL
+                    volume = 0f
+                    trackSelectionParameters = trackSelectionParameters
+                        .buildUpon()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+                        .build()
+                    prepare()
+                    playWhenReady = true
+                    videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
+                }
+            } catch (e: Exception) {
+                null
             }
         } else null
     }
 
     DisposableEffect(exoPlayer) {
         onDispose {
-            exoPlayer?.release()
+            try {
+                exoPlayer?.release()
+            } catch (e: Exception) {
+                // Ignore
+            }
         }
     }
 
@@ -462,16 +469,20 @@ fun VideoBanner() {
         if (exoPlayer != null) {
             AndroidView(
                 factory = {
-                    PlayerView(context).apply {
-                        player = exoPlayer
-                        useController = false
-                        useArtwork = false
-                        setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
-                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                        layoutParams = FrameLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
+                    try {
+                        PlayerView(context).apply {
+                            player = exoPlayer
+                            useController = false
+                            useArtwork = false
+                            setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                            layoutParams = FrameLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                        }
+                    } catch (e: Exception) {
+                        FrameLayout(context)
                     }
                 },
                 modifier = Modifier.fillMaxSize()
