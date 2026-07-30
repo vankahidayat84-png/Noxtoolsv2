@@ -481,36 +481,50 @@ fun HomeHeader(onOpenSidebar: () -> Unit, modifier: Modifier = Modifier) {
 @Composable
 fun VideoBanner() {
     val context = LocalContext.current
-    val bannerResId = remember {
-        context.resources.getIdentifier("banner", "raw", context.packageName)
-    }
+    var hasError by remember { mutableStateOf(false) }
+    var isReady by remember { mutableStateOf(false) }
 
-    val exoPlayer = remember(bannerResId) {
-        if (bannerResId != 0) {
-            try {
-                ExoPlayer.Builder(context).build().apply {
-                    val uri = Uri.parse("android.resource://${context.packageName}/$bannerResId")
-                    setMediaItem(MediaItem.fromUri(uri))
-                    repeatMode = Player.REPEAT_MODE_ALL
-                    volume = 0f
-                    trackSelectionParameters = trackSelectionParameters
-                        .buildUpon()
-                        .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
-                        .build()
-                    prepare()
-                    playWhenReady = true
-                    videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
-                }
-            } catch (e: Exception) {
-                null
+    val exoPlayer = remember {
+        val player = ExoPlayer.Builder(context).build()
+        try {
+            val bannerResId = context.resources.getIdentifier("banner", "raw", context.packageName)
+            if (bannerResId != 0) {
+                val uri = Uri.parse("android.resource://${context.packageName}/$bannerResId")
+                player.setMediaItem(MediaItem.fromUri(uri))
+                player.repeatMode = Player.REPEAT_MODE_ALL
+                player.volume = 0f
+                player.trackSelectionParameters = player.trackSelectionParameters
+                    .buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+                    .build()
+                
+                player.addListener(object : Player.Listener {
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        hasError = true
+                    }
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        if (playbackState == Player.STATE_READY) {
+                            isReady = true
+                        }
+                    }
+                })
+                
+                player.prepare()
+                player.playWhenReady = true
+                player.videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
+            } else {
+                hasError = true
             }
-        } else null
+        } catch (e: Exception) {
+            hasError = true
+        }
+        player
     }
 
     DisposableEffect(exoPlayer) {
         onDispose {
             try {
-                exoPlayer?.release()
+                exoPlayer.release()
             } catch (e: Exception) {
                 // Ignore
             }
@@ -523,7 +537,7 @@ fun VideoBanner() {
             .aspectRatio(16f/9f)
             .background(DarkPurple)
     ) {
-        if (exoPlayer != null && bannerResId != 0) {
+        if (!hasError) {
             AndroidView(
                 factory = {
                     try {
@@ -539,12 +553,15 @@ fun VideoBanner() {
                             )
                         }
                     } catch (e: Exception) {
+                        hasError = true
                         FrameLayout(context)
                     }
                 },
                 modifier = Modifier.fillMaxSize()
             )
-        } else {
+        }
+        
+        if (hasError || !isReady) {
             Box(
                 modifier = Modifier.fillMaxSize().background(
                     Brush.linearGradient(colors = listOf(DarkPurple, SoftPurple))
