@@ -47,12 +47,21 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.R
 import com.example.ui.theme.*
 
 @Composable
-fun HomeScreen() {
+fun HomeScreen(
+    musicViewModel: MusicViewModel = viewModel()
+) {
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        musicViewModel.initPlayer(context)
+    }
+
     var isSidebarOpen by remember { mutableStateOf(false) }
+    var currentScreen by remember { mutableStateOf("Home") }
 
     Box(modifier = Modifier.fillMaxSize().background(DarkPurple)) {
         
@@ -69,7 +78,24 @@ fun HomeScreen() {
                 .fillMaxSize()
                 .then(blurModifier)
         ) {
-            HomeContent(onOpenSidebar = { isSidebarOpen = true })
+            Crossfade(targetState = currentScreen, label = "screen_transition") { screen ->
+                when (screen) {
+                    "Home" -> {
+                        HomeContent(
+                            musicViewModel = musicViewModel,
+                            onOpenSidebar = { isSidebarOpen = true },
+                            onOpenMusicList = { currentScreen = "Music" }
+                        )
+                    }
+                    "Music" -> {
+                        MusicScreen(
+                            musicViewModel = musicViewModel,
+                            onBack = { currentScreen = "Home" },
+                            onOpenSidebar = { isSidebarOpen = true }
+                        )
+                    }
+                }
+            }
         }
 
         // Scrim
@@ -103,13 +129,25 @@ fun HomeScreen() {
             ),
             modifier = Modifier.align(Alignment.CenterStart)
         ) {
-            Sidebar(onClose = { isSidebarOpen = false })
+            Sidebar(
+                onClose = { isSidebarOpen = false },
+                onNavigate = { route ->
+                    isSidebarOpen = false
+                    if (route == "Daftar Musik") {
+                        currentScreen = "Music"
+                    }
+                }
+            )
         }
     }
 }
 
 @Composable
-fun HomeContent(onOpenSidebar: () -> Unit) {
+fun HomeContent(
+    musicViewModel: MusicViewModel,
+    onOpenSidebar: () -> Unit,
+    onOpenMusicList: () -> Unit
+) {
     val scrollState = rememberLazyListState()
     
     val firstVisibleItemScrollOffset = remember { derivedStateOf { scrollState.firstVisibleItemScrollOffset } }
@@ -178,6 +216,20 @@ fun HomeContent(onOpenSidebar: () -> Unit) {
 
             item {
                 Spacer(modifier = Modifier.height(16.dp))
+                val currentTrack by musicViewModel.currentTrack.collectAsState()
+                val isPlaying by musicViewModel.isPlaying.collectAsState()
+                
+                MusicPlayerCard(
+                    currentTrack = currentTrack,
+                    isPlaying = isPlaying,
+                    onPlayPauseClick = { musicViewModel.togglePlayPause() },
+                    onClick = onOpenMusicList,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
                 MainMenuGrid(modifier = Modifier.padding(horizontal = 20.dp))
             }
 
@@ -220,7 +272,7 @@ fun HomeContent(onOpenSidebar: () -> Unit) {
 }
 
 @Composable
-fun Sidebar(onClose: () -> Unit) {
+fun Sidebar(onClose: () -> Unit, onNavigate: (String) -> Unit = {}) {
     val scrollState = rememberScrollState()
     
     Box(
@@ -244,32 +296,38 @@ fun Sidebar(onClose: () -> Unit) {
             SidebarCategory(
                 title = "Menu Harian",
                 items = listOf("Belanja", "Menabung", "Hutang", "Piutang", "Riwayat"),
-                accentColor = SakuraPink
+                accentColor = SakuraPink,
+                onNavigate = onNavigate
             )
             SidebarCategory(
                 title = "Downloader",
                 items = listOf("YouTube", "Instagram", "TikTok", "Pinterest", "Riwayat"),
-                accentColor = PeachOrange
+                accentColor = PeachOrange,
+                onNavigate = onNavigate
             )
             SidebarCategory(
                 title = "Music Player",
                 items = listOf("Daftar Musik", "Playlist"),
-                accentColor = SoftPurpleAccent
+                accentColor = SoftPurpleAccent,
+                onNavigate = onNavigate
             )
             SidebarCategory(
                 title = "Daftar Tools",
                 items = listOf("Gempa BMKG", "Cuaca", "Translate", "NSLookup", "SQLite", "Bot WhatsApp", "Buat Sticker", "Maps", "Browser", "QR"),
-                accentColor = CyanBlue
+                accentColor = CyanBlue,
+                onNavigate = onNavigate
             )
             SidebarCategory(
                 title = "Menu AI",
                 items = listOf("Chatbot", "Analisa Pengeluaran", "Edukasi Uang"),
-                accentColor = AccentViolet
+                accentColor = AccentViolet,
+                onNavigate = onNavigate
             )
             SidebarCategory(
                 title = "Sistem",
                 items = listOf("Kelola Server Backend", "Kelola API AI", "Tambah Tools", "Ganti Profil", "Ganti Tema", "Info Aplikasi", "Info Versi", "Changelog Update"),
-                accentColor = AccentGold
+                accentColor = AccentGold,
+                onNavigate = onNavigate
             )
         }
         
@@ -292,7 +350,7 @@ fun Sidebar(onClose: () -> Unit) {
 }
 
 @Composable
-fun SidebarCategory(title: String, items: List<String>, accentColor: Color) {
+fun SidebarCategory(title: String, items: List<String>, accentColor: Color, onNavigate: (String) -> Unit = {}) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -316,13 +374,13 @@ fun SidebarCategory(title: String, items: List<String>, accentColor: Color) {
         )
         
         items.forEach { item ->
-            SidebarItem(text = item, accentColor = accentColor)
+            SidebarItem(text = item, accentColor = accentColor, onClick = { onNavigate(item) })
         }
     }
 }
 
 @Composable
-fun SidebarItem(text: String, accentColor: Color) {
+fun SidebarItem(text: String, accentColor: Color, onClick: () -> Unit = {}) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     
@@ -341,7 +399,7 @@ fun SidebarItem(text: String, accentColor: Color) {
             .clickable(
                 interactionSource = interactionSource,
                 indication = androidx.compose.material3.ripple(color = accentColor)
-            ) {}
+            ) { onClick() }
             .padding(vertical = 8.dp, horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -430,8 +488,7 @@ fun VideoBanner() {
     val exoPlayer = remember(bannerResId) {
         if (bannerResId != 0) {
             try {
-                ExoPlayer.Builder(context)
-                    .build().apply {
+                ExoPlayer.Builder(context).build().apply {
                     val uri = Uri.parse("android.resource://${context.packageName}/$bannerResId")
                     setMediaItem(MediaItem.fromUri(uri))
                     repeatMode = Player.REPEAT_MODE_ALL
@@ -466,7 +523,7 @@ fun VideoBanner() {
             .aspectRatio(16f/9f)
             .background(DarkPurple)
     ) {
-        if (exoPlayer != null) {
+        if (exoPlayer != null && bannerResId != 0) {
             AndroidView(
                 factory = {
                     try {
@@ -487,6 +544,21 @@ fun VideoBanner() {
                 },
                 modifier = Modifier.fillMaxSize()
             )
+        } else {
+            Box(
+                modifier = Modifier.fillMaxSize().background(
+                    Brush.linearGradient(colors = listOf(DarkPurple, SoftPurple))
+                ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "NO BANNER VIDEO",
+                    color = Color.White.copy(alpha = 0.3f),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp
+                )
+            }
         }
         
         // Top and Bottom Borders
@@ -834,5 +906,97 @@ fun FinanceCard(
             fontSize = 12.sp,
             fontWeight = FontWeight.Normal
         )
+    }
+}
+
+@Composable
+fun MusicPlayerCard(
+    currentTrack: MusicTrack?,
+    isPlaying: Boolean,
+    onPlayPauseClick: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "scale"
+    )
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .shadow(
+                elevation = 20.dp,
+                shape = RoundedCornerShape(24.dp),
+                spotColor = Color.Black.copy(alpha = 0.3f)
+            )
+            .clip(RoundedCornerShape(24.dp))
+            .background(GlassDark)
+            .border(1.dp, GlassWhite, RoundedCornerShape(24.dp))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = androidx.compose.material3.ripple(color = Color.White)
+            ) { onClick() }
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Icon
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(SoftPurpleAccent.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = "🎵", fontSize = 24.sp)
+        }
+        
+        Spacer(modifier = Modifier.width(16.dp))
+        
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = currentTrack?.title ?: "Belum ada musik dipilih",
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            val durationText = currentTrack?.let {
+                val seconds = (it.duration / 1000) % 60
+                val minutes = (it.duration / (1000 * 60)) % 60
+                String.format("%02d:%02d", minutes, seconds)
+            } ?: "00:00"
+            Text(
+                text = currentTrack?.artist ?: "Durasi: $durationText",
+                color = WarmPeach.copy(alpha = 0.6f),
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        }
+        
+        Spacer(modifier = Modifier.width(12.dp))
+
+        // Play/Pause Button
+        IconButton(
+            onClick = onPlayPauseClick,
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(SoftPurpleAccent.copy(alpha = 0.2f))
+        ) {
+            Text(
+                text = if (isPlaying) "⏸" else "▶", 
+                fontSize = 18.sp,
+                color = Color.White
+            )
+        }
     }
 }
