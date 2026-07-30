@@ -483,40 +483,39 @@ fun VideoBanner() {
     val context = LocalContext.current
     var hasError by remember { mutableStateOf(false) }
     var isReady by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val exoPlayer = remember {
         val player = ExoPlayer.Builder(context).build()
         try {
-            val bannerResId = context.resources.getIdentifier("banner", "raw", context.packageName)
-            if (bannerResId != 0) {
-                val uri = Uri.parse("android.resource://${context.packageName}/$bannerResId")
-                player.setMediaItem(MediaItem.fromUri(uri))
-                player.repeatMode = Player.REPEAT_MODE_ALL
-                player.volume = 0f
-                player.trackSelectionParameters = player.trackSelectionParameters
-                    .buildUpon()
-                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
-                    .build()
-                
-                player.addListener(object : Player.Listener {
-                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                        hasError = true
+            val bannerResId = R.raw.banner
+            val uri = androidx.media3.datasource.RawResourceDataSource.buildRawResourceUri(bannerResId)
+            player.setMediaItem(MediaItem.fromUri(uri))
+            player.repeatMode = Player.REPEAT_MODE_ALL
+            player.volume = 0f
+            player.trackSelectionParameters = player.trackSelectionParameters
+                .buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+                .build()
+            
+            player.addListener(object : Player.Listener {
+                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                    hasError = true
+                    errorMessage = error.message
+                }
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY) {
+                        isReady = true
                     }
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        if (playbackState == Player.STATE_READY) {
-                            isReady = true
-                        }
-                    }
-                })
-                
-                player.prepare()
-                player.playWhenReady = true
-                player.videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
-            } else {
-                hasError = true
-            }
+                }
+            })
+            
+            player.prepare()
+            player.playWhenReady = true
+            player.videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
         } catch (e: Exception) {
             hasError = true
+            errorMessage = e.message
         }
         player
     }
@@ -554,6 +553,7 @@ fun VideoBanner() {
                         }
                     } catch (e: Exception) {
                         hasError = true
+                        errorMessage = e.message
                         FrameLayout(context)
                     }
                 },
@@ -565,15 +565,16 @@ fun VideoBanner() {
             Box(
                 modifier = Modifier.fillMaxSize().background(
                     Brush.linearGradient(colors = listOf(DarkPurple, SoftPurple))
-                ),
+                ).padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "NO BANNER VIDEO",
-                    color = Color.White.copy(alpha = 0.3f),
-                    fontSize = 14.sp,
+                    text = errorMessage ?: "LOADING BANNER...",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 2.sp
+                    letterSpacing = 1.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             }
         }
